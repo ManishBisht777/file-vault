@@ -17,7 +17,7 @@ export default function Home() {
         <DialogTrigger asChild>
           <Button variant="outline">Image upload</Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle className="text-center">Upload your files</DialogTitle>
             <DialogDescription className="text-center">

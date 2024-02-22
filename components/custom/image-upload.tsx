@@ -1,6 +1,6 @@
 "use client";
 
-import axios, { AxiosProgressEvent } from "axios";
+import axios, { AxiosProgressEvent, CancelTokenSource } from "axios";
 import {
   AudioWaveform,
   File,
@@ -18,6 +18,7 @@ import { ScrollArea } from "../ui/scroll-area";
 interface FileUploadProgress {
   progress: number;
   File: File;
+  source: CancelTokenSource;
 }
 
 enum FileTypes {
@@ -94,9 +95,13 @@ export default function ImageUpload() {
 
   // feel free to mode all these functions to separate utils
   // here is just for simplicity
-  const onUploadProgress = (progressEvent: any, file: File) => {
+  const onUploadProgress = (
+    progressEvent: AxiosProgressEvent,
+    file: File,
+    cancelSource: CancelTokenSource
+  ) => {
     const progress = Math.round(
-      (progressEvent.loaded / progressEvent.total) * 100
+      (progressEvent.loaded / (progressEvent.total ?? 0)) * 100
     );
 
     if (progress === 100) {
@@ -119,6 +124,7 @@ export default function ImageUpload() {
         {
           progress,
           File: file,
+          source: cancelSource,
         },
       ];
     });
@@ -126,13 +132,15 @@ export default function ImageUpload() {
 
   const uploadImageToCloudinary = async (
     formData: FormData,
-    onUploadProgress: (progressEvent: AxiosProgressEvent) => void
+    onUploadProgress: (progressEvent: AxiosProgressEvent) => void,
+    cancelSource: CancelTokenSource
   ) => {
     return axios.post(
       `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUD_NAME}/image/upload`,
       formData,
       {
         onUploadProgress,
+        cancelToken: cancelSource.token,
       }
     );
   };
@@ -150,40 +158,42 @@ export default function ImageUpload() {
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     // dummy upload
 
-    setFilesToUpload((prevUploadProgress) => {
-      return [
-        ...prevUploadProgress,
-        ...acceptedFiles.map((file) => {
-          return {
-            progress: 0,
-            File: file,
-          };
-        }),
-      ];
-    });
+    // setFilesToUpload((prevUploadProgress) => {
+    //   return [
+    //     ...prevUploadProgress,
+    //     ...acceptedFiles.map((file) => {
+    //       return {
+    //         progress: 0,
+    //         File: file,
+    //       };
+    //     }),
+    //   ];
+    // });
 
     // actual upload
 
-    // const fileUploadBatch = acceptedFiles.map((file) => {
-    //   const formData = new FormData();
-    //   formData.append("file", file);
-    //   formData.append(
-    //     "upload_preset",
-    //     process.env.NEXT_PUBLIC_UPLOAD_PRESET as string
-    //   );
+    const fileUploadBatch = acceptedFiles.map((file) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append(
+        "upload_preset",
+        process.env.NEXT_PUBLIC_UPLOAD_PRESET as string
+      );
 
-    //   return uploadImageToCloudinary(formData, (progressEvent) =>
-    //     onUploadProgress(progressEvent, file)
-    //   );
-    // });
+      const cancelSource = axios.CancelToken.source();
+      return uploadImageToCloudinary(
+        formData,
+        (progressEvent) => onUploadProgress(progressEvent, file, cancelSource),
+        cancelSource
+      );
+    });
 
-    // try {
-    //   await Promise.all(fileUploadBatch);
-    //   alert("All files uploaded successfully");
-    // } catch (error) {
-    //   console.error("Error uploading files: ", error);
-    //   alert("Error uploading files");
-    // }
+    try {
+      await Promise.all(fileUploadBatch);
+      alert("All files uploaded successfully");
+    } catch (error) {
+      console.error("Error uploading files: ", error);
+    }
   }, []);
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
@@ -254,7 +264,10 @@ export default function ImageUpload() {
                       </div>
                     </div>
                     <button
-                      onClick={() => removeFile(fileUploadProgress.File)}
+                      onClick={() => {
+                        fileUploadProgress.source.cancel("Upload cancelled");
+                        removeFile(fileUploadProgress.File);
+                      }}
                       className="bg-red-500 text-white transition-all items-center justify-center cursor-pointer px-2 hidden group-hover:flex"
                     >
                       <X size={20} />

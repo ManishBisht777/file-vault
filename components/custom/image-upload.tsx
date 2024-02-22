@@ -18,7 +18,7 @@ import { ScrollArea } from "../ui/scroll-area";
 interface FileUploadProgress {
   progress: number;
   File: File;
-  source: CancelTokenSource;
+  source: CancelTokenSource | null;
 }
 
 enum FileTypes {
@@ -116,17 +116,18 @@ export default function ImageUpload() {
       return;
     }
 
-    const updatedFiles = filesToUpload.filter((item) => item.File !== file);
-
     setFilesToUpload((prevUploadProgress) => {
-      return [
-        ...updatedFiles,
-        {
-          progress,
-          File: file,
-          source: cancelSource,
-        },
-      ];
+      return prevUploadProgress.map((item) => {
+        if (item.File.name === file.name) {
+          return {
+            ...item,
+            progress,
+            source: cancelSource,
+          };
+        } else {
+          return item;
+        }
+      });
     });
   };
 
@@ -156,44 +157,43 @@ export default function ImageUpload() {
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    // dummy upload
-
-    // setFilesToUpload((prevUploadProgress) => {
-    //   return [
-    //     ...prevUploadProgress,
-    //     ...acceptedFiles.map((file) => {
-    //       return {
-    //         progress: 0,
-    //         File: file,
-    //       };
-    //     }),
-    //   ];
-    // });
-
-    // actual upload
-
-    const fileUploadBatch = acceptedFiles.map((file) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append(
-        "upload_preset",
-        process.env.NEXT_PUBLIC_UPLOAD_PRESET as string
-      );
-
-      const cancelSource = axios.CancelToken.source();
-      return uploadImageToCloudinary(
-        formData,
-        (progressEvent) => onUploadProgress(progressEvent, file, cancelSource),
-        cancelSource
-      );
+    setFilesToUpload((prevUploadProgress) => {
+      return [
+        ...prevUploadProgress,
+        ...acceptedFiles.map((file) => {
+          return {
+            progress: 0,
+            File: file,
+            source: null,
+          };
+        }),
+      ];
     });
 
-    try {
-      await Promise.all(fileUploadBatch);
-      alert("All files uploaded successfully");
-    } catch (error) {
-      console.error("Error uploading files: ", error);
-    }
+    // cloudinary upload
+
+    // const fileUploadBatch = acceptedFiles.map((file) => {
+    //   const formData = new FormData();
+    //   formData.append("file", file);
+    //   formData.append(
+    //     "upload_preset",
+    //     process.env.NEXT_PUBLIC_UPLOAD_PRESET as string
+    //   );
+
+    //   const cancelSource = axios.CancelToken.source();
+    //   return uploadImageToCloudinary(
+    //     formData,
+    //     (progressEvent) => onUploadProgress(progressEvent, file, cancelSource),
+    //     cancelSource
+    //   );
+    // });
+
+    // try {
+    //   await Promise.all(fileUploadBatch);
+    //   alert("All files uploaded successfully");
+    // } catch (error) {
+    //   console.error("Error uploading files: ", error);
+    // }
   }, []);
 
   const { getRootProps, getInputProps } = useDropzone({ onDrop });
@@ -265,7 +265,8 @@ export default function ImageUpload() {
                     </div>
                     <button
                       onClick={() => {
-                        fileUploadProgress.source.cancel("Upload cancelled");
+                        if (fileUploadProgress.source)
+                          fileUploadProgress.source.cancel("Upload cancelled");
                         removeFile(fileUploadProgress.File);
                       }}
                       className="bg-red-500 text-white transition-all items-center justify-center cursor-pointer px-2 hidden group-hover:flex"

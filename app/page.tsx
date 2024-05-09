@@ -37,7 +37,7 @@ export default function Home() {
             </div>
           </DialogContent>
         </Dialog>
-        <Link className="flex gap-1 items-center" href={"/"}>
+        <Link className="flex gap-1 items-center" href="https://github.com/ManishBisht777/file-vault">
           Github
           <MoveRight size={15} />
         </Link>
